@@ -1,0 +1,126 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# PyCharm / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# Environment variables and credentials
+.env
+.env.local
+.env.*.local
+*.env
+config.json
+credentials.json
+secrets.json
+api_keys.txt
+tokens.txt
+
+# API Keys and Tokens
+*_token.txt
+*_key.txt
+*_secret.txt
+*_credentials.txt
+
+# HuggingFace Cache
+~/.cache/huggingface/
+.cache/
+
+# Model files (large binary files)
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.h5
+*.pb
+models/
+checkpoints/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Logs
+*.log
+logs/
+*.out
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Data files (optional - uncomment if you don't want to track data)
+# *.csv
+# *.xlsx
+# *.json
+# data/
+
+
+
+# OS-specific
+.Trashes
+.Spotlight-V100
+.TemporaryItems
+.VolumeIcon.ico
+.fseventsd
+.DocumentRevisions-V100
+.PKInstallSandboxManager
+.apdisk
