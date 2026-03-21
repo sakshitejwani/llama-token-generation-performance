@@ -35,14 +35,14 @@ This project implements comprehensive benchmarking and analysis of token-generat
 ```
 PROJECT_6_LLAMA_LATENCY/
 ├── benchmarks/                          # Benchmarking code
-│   ├── llama_latency_bench.py          # Main benchmark harness (GOAL 1)
-│   ├── instrumentation.py              # Instrumentation hooks (GOAL 2)
+│   ├── llama_latency_bench.py          # Main benchmark harness 
+│   ├── instrumentation.py              # Instrumentation hooks 
 │   └── results/                        # Benchmark output files
 │       └── llama_latency_benchmark_*.json
 │
 ├── analysis/                            # Analysis and visualization
-│   ├── decomposition_analysis.py       # Latency breakdown analysis (GOAL 2)
-│   ├── visualization_generator.py      # Create 5 main charts (GOAL 3)
+│   ├── decomposition_analysis.py       # Latency breakdown analysis 
+│   ├── visualization_generator.py      # Create 5 main charts 
 │   ├── plots/                          # Generated visualization PNGs
 │   │   ├── 01_latency_decomposition.png
 │   │   ├── 02_scaling_sequence_length.png
@@ -52,7 +52,7 @@ PROJECT_6_LLAMA_LATENCY/
 │   └── decomposition_analysis_report.md
 │
 ├── optimization/                        # Optimization proposal
-│   └── optimization_proposal.py        # Detailed GOAL 5 proposal
+│   └── optimization_proposal.py        
 │       → Generates: KV_CACHE_OPTIMIZATION_PROPOSAL.md
 │
 ├── report/                              # Final deliverable
@@ -60,8 +60,8 @@ PROJECT_6_LLAMA_LATENCY/
 │   └── figures/                        # Report figures
 │
 ├── requirements.txt                     # Python dependencies
-├── README.md                           # This file
-└── SETUP.md                            # Detailed setup instructions
+├── README.md                           
+└── SETUP.md                            # setup instructions
 ```
 
 ---
@@ -114,14 +114,6 @@ cd optimization
 python optimization_proposal.py
 # Output: KV_CACHE_OPTIMIZATION_PROPOSAL.md
 ```
-
-### 5. View Final Report
-
-```bash
-# Open in your editor/markdown viewer:
-cat report/PROJECT_6_REPORT.md
-```
----
 
 ## Project Implementation Summary
 
