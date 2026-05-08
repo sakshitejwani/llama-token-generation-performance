@@ -1,15 +1,3 @@
-"""
-Latency Decomposition Analysis
-
-Analyzes the benchmark results to identify which architectural components
-consume the most time and how latency is distributed across the model.
-
-Answers:
-- What percentage of time is spent in attention vs MLP vs other components?
-- Which layers are bottlenecks?
-- How does first-token latency compare to per-token latency?
-"""
-
 import json
 import numpy as np
 from pathlib import Path
@@ -29,18 +17,7 @@ class DecompositionAnalyzer:
         self.model_name = self.results.get('model_info', {}).get('model_name', 'LLaMA-2-7B')
     
     def estimate_component_breakdown(self) -> Dict[str, float]:
-        """
-        Estimate latency breakdown from TTFT and PTL measurements.
-        
-        Uses architectural knowledge to estimate component percentages:
-        - Attention: ~60% (most complex computation)
-        - MLP: ~25% (feed-forward layers)
-        - Embedding: ~5% (simpler lookup)
-        - LayerNorm: ~3% (lightweight normalization)
-        - Sampling: ~2% (simple argmax/sampling)
-        - Framework overhead: ~5% (kernel launches, synchronization)
-        """
-        
+
         ttft_data = self.results.get('ttft_analysis', {})
         ptl_data = self.results.get('ptl_analysis', {})
         
@@ -61,7 +38,6 @@ class DecompositionAnalyzer:
         }
     
     def _default_breakdown(self) -> Dict[str, float]:
-        """Default component breakdown percentages."""
         return {
             'attention': 0.62,
             'mlp': 0.22,
@@ -72,21 +48,7 @@ class DecompositionAnalyzer:
         }
     
     def analyze_ttft_vs_ptl(self) -> Dict:
-        """
-        Compare First-Token Latency vs Per-Token Latency.
-        
-        TTFT > PTL indicates KV-cache effectiveness:
-        TTFT is higher because:
-        1. First token processes full input sequence (no cache)
-        2. All attention heads compute from scratch
-        3. No KV cache hits possible
-        
-        PTL is lower because:
-        1. KV cache available (previous tokens cached)
-        2. Only new query needed
-        3. Attention can mostly reuse cached values
-        """
-        
+
         ttft_data = self.results.get('ttft_analysis', {})
         ptl_data = self.results.get('ptl_analysis', {})
         
@@ -126,18 +88,7 @@ class DecompositionAnalyzer:
         }
     
     def analyze_scaling_behavior(self) -> Dict:
-        """
-        Analyze how latency scales with sequence length.
-        
-        Expected: Per-token latency increases with sequence length
-        because KV-cache grows and attention becomes more expensive.
-        
-        This should illuminate:
-        - Is it linear scaling? (Good - predictable)
-        - Is it superlinear? (Memory bandwidth saturation)
-        - At what point does it become problematic?
-        """
-        
+
         scaling_data = self.results.get('scaling_analysis', {}).get('results', [])
         
         if not scaling_data or len(scaling_data) < 2:
@@ -184,7 +135,6 @@ class DecompositionAnalyzer:
         }
     
     def generate_report(self) -> str:
-        """Generate comprehensive decomposition analysis report."""
         
         breakdown = self.estimate_component_breakdown()
         ttft_analysis = self.analyze_ttft_vs_ptl()
@@ -211,18 +161,7 @@ Based on architectural analysis, estimated latency distribution:
         
         report += f"""
 
-**Key Finding**: Attention dominates token generation latency (62% of time)
 
-### Why Attention is Expensive:
-- Attention matrix: Query × Key^T = (1 × d) × (d × seq_len) = seq_len comparisons
-- For each position in sequence, compute similarity scores
-- Apply softmax across sequence
-- Weight values by attention scores
-- Multiply back to embedding dimension
-
-This is fundamentally O(seq_len) per token, making it the primary bottleneck.
-
----
 
 ## 2. First-Token vs Per-Token Latency (KV-Cache Effect)
 
@@ -238,75 +177,29 @@ This is fundamentally O(seq_len) per token, making it the primary bottleneck.
 
 ## 4. Architectural Bottleneck Attribution
 
-### Primary Bottleneck: Attention Memory Read
-**Evidence**:
 - Attention takes {breakdown.get('attention', 0)*100:.0f}% of first-token time
-- Latency scales with sequence length (KV-cache growth)
-- Memory bandwidth becomes saturated with long sequences
 
-**Root Cause**:
 ```
-Attention implementation:
-1. Load query: d dimensions        (KV-cache still needed)
-2. Compare against all keys: seq_len × d    (LARGE - grows with seq_len)
-3. Read attention weights: seq_len          (Dependent on all previous tokens)
-4. Read values and aggregate: seq_len × d   (LARGE)
-
-Total memory reads ≈ seq_len × 4 × d × num_heads
-
-For seq_len=200, d=4096, heads=32:
-  200 × 4 × 4096 × 32 = 100 Million values
-  At 900 GB/sec bandwidth: 100M × 4bytes / 900e9 = ~450μs per head
-  × 32 heads = ~14ms per layer
-  × 32 layers = ~450ms just for memory reads!
-```
-
-**Non-Ideal Factor**: Memory bandwidth utilization is poor because:
-- Attention requires random memory access patterns
-- Cache coherency issues in long sequences
-- No opportunity for vectorization across sequence dimension
 
 ### Secondary Bottleneck: MLP Computation
 - Takes {breakdown.get('mlp', 0)*100:.0f}% of time
-- More compute-bound than attention
-- Could benefit from better kernel fusion
-- Less impactful than attention
 
 ---
 
 ## 5. Optimization Implications
 
-Based on this decomposition analysis:
-
-### High-Impact Optimization
-**Target**: Reduce attention latency (62% of time)
-**Method**: KV-cache layout optimization or sparse attention
-**Expected improvement**: 15-25% total latency reduction
-
-### Medium-Impact Optimization
 **Target**: Reduce framework overhead ({breakdown.get('framework_overhead', 0)*100:.0f}% of time)
-**Method**: Kernel fusion
-**Expected improvement**: 5-10% total latency reduction
+
 
 ### Low-Impact Optimization
 **Target**: Optimize MLP ({breakdown.get('mlp', 0)*100:.0f}% of time)
-**Method**: Advanced compute kernels
-**Expected improvement**: 2-5% total latency reduction
 
----
-
-## References
-
-1. Attention Is All You Need (Vaswani et al., 2017)
-2. LLaMA: Open and Efficient Foundation Language Models (Touvron et al., 2023)
-3. Efficient Transformers: A Survey (Tay et al., 2022)
 """
         
         return report
 
 
 def main():
-    """Run decomposition analysis on latest benchmark results."""
     
     # Find latest results file
     results_dir = Path('benchmarks/results')

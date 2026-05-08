@@ -1,16 +1,3 @@
-"""
-Main LLaMA Token-Generation Latency Benchmarking Harness
-
-This script runs comprehensive latency benchmarks for LLaMA-2-7B:
-1. First-token latency (TTFT) - Time to first generated token
-2. Per-token latency (PTL) - Steady-state generation latency
-3. Latency decomposition - Time breakdown by architectural component
-4. Scaling analysis - How latency changes with sequence length
-5. Batch efficiency - Multi-request processing
-
-Outputs results as JSON for analysis.
-"""
-
 import json
 import time
 import torch
@@ -21,23 +8,12 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import psutil
 import gc
 
-# Import custom instrumentation
 from instrumentation import DetailedLatencyMeasurer, TimerContext
 
 
 class LLaMABenchmark:
-    """
-    Comprehensive benchmarking harness for LLaMA-2-7B token generation.
-    """
     
     def __init__(self, model_name='meta-llama/Llama-2-7b-hf', device='cpu'):
-        """
-        Initialize benchmark environment.
-        
-        Args:
-            model_name: HuggingFace model identifier
-            device: 'cpu' or 'cuda'
-        """
         self.model_name = model_name
         self.device = device
         self.model = None
@@ -51,14 +27,11 @@ class LLaMABenchmark:
         print(f"  Timestamp: {datetime.now().isoformat()}")
         
     def load_model(self):
-        """Load LLaMA-2-7B from HuggingFace."""
         print("\n[1/5] Loading model and tokenizer...")
         
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            # Set padding token for batch processing
             self.tokenizer.pad_token = self.tokenizer.eos_token
-            # Use float16 to reduce memory usage (7GB instead of 14GB)
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 torch_dtype=torch.float16,
@@ -67,7 +40,6 @@ class LLaMABenchmark:
             )
             self.model.eval()
             
-            # Disable gradient computation
             for param in self.model.parameters():
                 param.requires_grad = False
             
@@ -75,7 +47,6 @@ class LLaMABenchmark:
             
             print("✓ Model loaded successfully")
             
-            # Log model info
             self.results['model_info'] = {
                 'model_name': self.model_name,
                 'num_parameters': sum(p.numel() for p in self.model.parameters()),
@@ -96,12 +67,6 @@ class LLaMABenchmark:
             return f"{psutil.Process().memory_info().rss / 1e9:.2f} GB"
     
     def benchmark_first_token_latency(self):
-        """
-        Benchmark: Time To First Token (TTFT)
-        
-        TTFT is critical for user experience in chat/interactive applications.
-        Measures time from prompt submission to first generated token.
-        """
         print("\n[2/5] Benchmarking First-Token Latency (TTFT)...")
         
         test_prompts = [
@@ -122,18 +87,15 @@ class LLaMABenchmark:
             inputs = self.tokenizer(prompt, return_tensors='pt').to(self.device)
             input_ids = inputs['input_ids']
             
-            # Warm-up passes
             with torch.no_grad():
                 for _ in range(2):
                     _ = self.model.generate(input_ids, max_new_tokens=1, do_sample=False)
             
-            # Actual measurements
             with torch.no_grad():
-                for trial in range(4):  # 4 trials per prompt
+                for trial in range(4):
                     torch.cuda.synchronize() if self.device == 'cuda' else None
                     start = time.perf_counter()
                     
-                    # Generate just 1 token - this is TTFT
                     _ = self.model.generate(input_ids, max_new_tokens=1, do_sample=False)
                     
                     torch.cuda.synchronize() if self.device == 'cuda' else None
@@ -161,12 +123,6 @@ class LLaMABenchmark:
         print(f"  TTFT Mean: {self.results['ttft_analysis']['overall_mean']:.2f}ms ± {self.results['ttft_analysis']['overall_std']:.2f}ms")
     
     def benchmark_per_token_latency(self):
-        """
-        Benchmark: Per-Token Latency (PTL)
-        
-        PTL is the steady-state latency after first token generation.
-        Critical for throughput and responsiveness of streaming output.
-        """
         print("\n[3/5] Benchmarking Per-Token Latency (PTL)...")
         
         test_cases = [
@@ -196,11 +152,11 @@ class LLaMABenchmark:
             inputs = self.tokenizer(test_case['prompt'], return_tensors='pt').to(self.device)
             input_ids = inputs['input_ids']
             
-            # Warm-up
+
             with torch.no_grad():
                 _ = self.model.generate(input_ids, max_new_tokens=5, do_sample=False)
             
-            # Measurements
+
             with torch.no_grad():
                 for trial in range(4):
                     torch.cuda.synchronize() if self.device == 'cuda' else None
@@ -238,28 +194,19 @@ class LLaMABenchmark:
             print(f"    {result['test_case']}: {result['ptl_ms']:.2f}ms/token")
     
     def benchmark_scaling_with_sequence_length(self):
-        """
-        Benchmark: How latency scales with input sequence length
-        
-        This tests KV-cache effects: longer sequences mean more
-        previous key-value pairs to read during attention.
-        """
         print("\n[4/5] Benchmarking Scaling with Sequence Length...")
         
-        sequence_lengths = [10, 50, 100, 200]  # Different input lengths
-        output_tokens = 20  # Generate same number of tokens for each
+        sequence_lengths = [10, 50, 100, 200]
+        output_tokens = 20
         
-        # Create test prompts of different lengths
         base_prompt = "The field of artificial intelligence has grown significantly. "
         
         scaling_results = []
         
         for seq_len_idx, seq_len in enumerate(sequence_lengths):
-            # Pad prompt to desired length
             num_repeats = seq_len // len(base_prompt.split()) + 1
             prompt = ' '.join(base_prompt.split() * num_repeats)
             
-            # Tokenize to verify length
             tokens = self.tokenizer(prompt, return_tensors='pt')
             actual_seq_len = tokens['input_ids'].shape[1]
             
@@ -270,11 +217,9 @@ class LLaMABenchmark:
             
             ptl_times = []
             
-            # Warm-up
             with torch.no_grad():
                 _ = self.model.generate(input_ids, max_new_tokens=3, do_sample=False)
             
-            # Measurements
             with torch.no_grad():
                 for trial in range(3):
                     torch.cuda.synchronize() if self.device == 'cuda' else None
@@ -310,11 +255,6 @@ class LLaMABenchmark:
             print(f"    Seq len {result['input_seq_len']:3d}: {result['ptl_ms']:.2f}ms/token")
     
     def benchmark_batch_efficiency(self):
-        """
-        Benchmark: Efficiency gain from batch processing multiple requests
-        
-        Shows how processing multiple prompts together improves throughput.
-        """
         print("\n[5/5] Benchmarking Batch Processing Efficiency...")
         
         prompts = [
@@ -327,7 +267,6 @@ class LLaMABenchmark:
         
         batch_results = []
         
-        # Batch size 1
         print("  Batch size 1 (sequential)...")
         single_times = []
         with torch.no_grad():
@@ -345,7 +284,6 @@ class LLaMABenchmark:
         
         single_total = sum(single_times)
         
-        # Batch size 5
         print("  Batch size 5 (batched)...")
         batch_inputs = self.tokenizer(
             prompts,
@@ -383,7 +321,6 @@ class LLaMABenchmark:
         print(f"  Speedup: {speedup:.2f}x")
     
     def run_all_benchmarks(self):
-        """Run all 5 benchmark modules."""
         try:
             self.load_model()
             self.benchmark_first_token_latency()
@@ -400,7 +337,6 @@ class LLaMABenchmark:
             raise
     
     def save_results(self, output_file=None):
-        """Save benchmark results to JSON."""
         if output_file is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = f"benchmarks/results/llama_latency_benchmark_{timestamp}.json"
@@ -408,7 +344,6 @@ class LLaMABenchmark:
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Add metadata
         self.results['metadata'] = {
             'timestamp': datetime.now().isoformat(),
             'benchmark_version': '1.0',
@@ -425,9 +360,6 @@ class LLaMABenchmark:
 
 
 def main():
-    """Run complete LLaMA latency benchmarking suite."""
-    
-    # Determine device
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
     
@@ -435,7 +367,6 @@ def main():
         print("⚠️  CPU benchmarking will be SLOW (1-2 hours for complete suite)")
         print("    Consider using GPU for faster results")
     
-    # Create and run benchmark
     benchmark = LLaMABenchmark(
         model_name='meta-llama/Llama-2-7b-hf',
         device=device

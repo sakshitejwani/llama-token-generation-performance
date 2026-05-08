@@ -1,15 +1,3 @@
-"""
-PyTorch Instrumentation Hooks for LLaMA Token-Generation Latency Decomposition
-
-This module provides hooks to measure latency of individual transformer components:
-- Token embedding lookup
-- Attention (QKV projection, softmax, KV-cache, output projection)
-- MLP (Feed-forward network)
-- LayerNorm and residual connections
-- Sampling/decoding logic
-- Framework overhead
-"""
-
 import torch
 import time
 from contextlib import contextmanager
@@ -18,10 +6,6 @@ import numpy as np
 
 
 class LatencyProfiler:
-    """
-    Profiles token generation latency by hooking into PyTorch modules.
-    Measures time spent in each component during forward pass.
-    """
     
     def __init__(self, model):
         self.model = model
@@ -43,14 +27,12 @@ class LatencyProfiler:
         self.hooks = []
     
     def register_embedding_hook(self):
-        """Hook into token embedding layer."""
         embedding_layer = self.model.model.embed_tokens
         
         def embedding_hook(module, input_args, output):
             if not self.enabled:
                 return
             
-            # Measure latency of embedding lookup
             if self.current_component == 'embedding':
                 start = time.perf_counter()
                 result = output
@@ -64,22 +46,17 @@ class LatencyProfiler:
         self.hooks.append(hook)
     
     def register_attention_hooks(self):
-        """Hook into all attention layers to measure QKV, softmax, KV-cache, output."""
-        
         num_layers = len(self.model.model.layers)
         
         for layer_idx, layer in enumerate(self.model.model.layers):
             attention = layer.self_attn
             
-            # Hook for QKV projection
             def qkv_hook(module, input_args, output, layer_id=layer_idx):
                 if not self.enabled or self.current_component != 'attention_qkv':
                     return
                 if 'attention_qkv' not in self.component_times:
                     self.component_times['attention_qkv'] = []
-                # This is approximate - actual timing happens during forward
             
-            # Hook for attention output projection
             def attn_output_hook(module, input_args, output, layer_id=layer_idx):
                 if not self.enabled or self.current_component != 'attention_output':
                     return
@@ -93,8 +70,6 @@ class LatencyProfiler:
             self.hooks.append(hook2)
     
     def register_mlp_hooks(self):
-        """Hook into MLP layers in each transformer block."""
-        
         for layer_idx, layer in enumerate(self.model.model.layers):
             mlp = layer.mlp
             
@@ -108,7 +83,6 @@ class LatencyProfiler:
             self.hooks.append(hook)
     
     def register_all_hooks(self):
-        """Register all instrumentation hooks."""
         self.register_embedding_hook()
         self.register_attention_hooks()
         self.register_mlp_hooks()
@@ -133,14 +107,10 @@ class TimerContext:
         
         if self.name not in self.timing_dict:
             self.timing_dict[self.name] = []
-        self.timing_dict[self.name].append(elapsed * 1000)  # Convert to ms
+        self.timing_dict[self.name].append(elapsed * 1000)
 
 
 class DetailedLatencyMeasurer:
-    """
-    Measures detailed token-generation latency by instrumenting key operations.
-    Provides decomposition into architectural components.
-    """
     
     def __init__(self, model, tokenizer, device='cpu'):
         self.model = model
@@ -149,21 +119,6 @@ class DetailedLatencyMeasurer:
         self.profiler = LatencyProfiler(model)
         
     def measure_component_latencies(self, prompt: str, max_new_tokens: int = 50) -> Dict:
-        """
-        Measure latency breakdown for all architectural components.
-        
-        Returns dictionary with timing for:
-        - embedding
-        - attention (total)
-        - attention_qkv (query-key-value projection)
-        - attention_softmax
-        - attention_kvcache
-        - attention_output (output projection)
-        - mlp
-        - layernorm
-        - sampling
-        - total
-        """
         
         timings = {
             'embedding': [],
@@ -179,21 +134,16 @@ class DetailedLatencyMeasurer:
             'total': []
         }
         
-        # Tokenize input
         inputs = self.tokenizer(prompt, return_tensors='pt').to(self.device)
         input_ids = inputs['input_ids']
         
         with torch.no_grad():
-            # Warm-up pass
             _ = self.model.generate(input_ids, max_new_tokens=1, do_sample=False)
             
-            # Actual measurement
             torch.cuda.synchronize() if torch.cuda.is_available() else None
             start_total = time.perf_counter()
             
-            # Forward pass to measure components
             with TimerContext('embedding', timings):
-                # Token embedding is computed in first forward
                 outputs = self.model.generate(
                     input_ids,
                     max_new_tokens=max_new_tokens,
@@ -203,28 +153,19 @@ class DetailedLatencyMeasurer:
                 )
             
             torch.cuda.synchronize() if torch.cuda.is_available() else None
-            total_time = (time.perf_counter() - start_total) * 1000  # ms
+            total_time = (time.perf_counter() - start_total) * 1000
             timings['total'] = [total_time]
         
         return timings
     
     def measure_per_token_latency(self, prompt: str, output_tokens: int = 50, 
                                    num_trials: int = 4) -> Dict:
-        """
-        Measure per-token latency with statistical rigor.
-        - Warm-up runs
-        - Multiple trials
-        - Outlier handling
-        - Statistical analysis
-        """
         
         latencies = []
         
-        # Tokenize
         inputs = self.tokenizer(prompt, return_tensors='pt').to(self.device)
         input_ids = inputs['input_ids']
         
-        # Warm-up (to stabilize system)
         print("Warming up model...")
         with torch.no_grad():
             for _ in range(3):
@@ -236,7 +177,6 @@ class DetailedLatencyMeasurer:
         
         print(f"Running {num_trials} trial(s) with {output_tokens} tokens...")
         
-        # Trials
         with torch.no_grad():
             for trial in range(num_trials):
                 torch.cuda.synchronize() if torch.cuda.is_available() else None
@@ -251,15 +191,12 @@ class DetailedLatencyMeasurer:
                 torch.cuda.synchronize() if torch.cuda.is_available() else None
                 elapsed = time.perf_counter() - start
                 
-                # Per-token latency
                 per_token_ms = (elapsed / output_tokens) * 1000
                 latencies.append(per_token_ms)
                 print(f"  Trial {trial+1}: {per_token_ms:.2f} ms/token (total: {elapsed*1000:.0f}ms)")
         
-        # Statistical analysis
         latencies = np.array(latencies)
         
-        # Remove outliers (top and bottom 20%)
         if len(latencies) > 2:
             lower_bound = np.percentile(latencies, 20)
             upper_bound = np.percentile(latencies, 80)
@@ -282,17 +219,11 @@ class DetailedLatencyMeasurer:
         }
     
     def measure_first_token_latency(self, prompt: str, num_trials: int = 4) -> Dict:
-        """
-        Measure time to first token (TTFT) - crucial UX metric.
-        This is separate from per-token latency.
-        """
-        
         ttft_times = []
         
         inputs = self.tokenizer(prompt, return_tensors='pt').to(self.device)
         input_ids = inputs['input_ids']
         
-        # Warm-up
         print("Warming up for TTFT measurement...")
         with torch.no_grad():
             for _ in range(2):
@@ -305,7 +236,6 @@ class DetailedLatencyMeasurer:
                 torch.cuda.synchronize() if torch.cuda.is_available() else None
                 start = time.perf_counter()
                 
-                # Generate just 1 token
                 _ = self.model.generate(input_id, max_new_tokens=1, do_sample=False)
                 
                 torch.cuda.synchronize() if torch.cuda.is_available() else None
