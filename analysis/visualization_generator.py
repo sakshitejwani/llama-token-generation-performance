@@ -1,13 +1,3 @@
-"""
-Visualization and Chart Generation for Latency Analysis
-
-Creates publication-quality visualizations showing:
-1. Latency decomposition by component (pie chart)
-2. Scaling with sequence length (line plot with fit)
-3. KV-cache effect: TTFT vs PTL comparison (bar chart)
-4. Memory bandwidth saturation analysis
-"""
-
 import json
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,7 +18,6 @@ class VisualizationGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Set style
         sns.set_style("whitegrid")
         sns.set_palette("husl")
         plt.rcParams['figure.dpi'] = 300
@@ -42,7 +31,6 @@ class VisualizationGenerator:
         Shows pie chart of where time is spent in token generation.
         """
         
-        # Estimated breakdown (from architectural knowledge)
         breakdown = {
             'Attention\n(62%)': 0.62,
             'MLP\n(22%)': 0.22,
@@ -53,7 +41,6 @@ class VisualizationGenerator:
         }
         
         fig, ax = plt.subplots(figsize=(10, 8))
-        
         colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F']
         wedges, texts, autotexts = ax.pie(
             breakdown.values(),
@@ -65,7 +52,6 @@ class VisualizationGenerator:
             explode=[0.05 if i == 0 else 0 for i in range(len(breakdown))]
         )
         
-        # Style text
         for text in texts:
             text.set_fontsize(11)
             text.set_weight('bold')
@@ -73,7 +59,6 @@ class VisualizationGenerator:
         ax.set_title('Latency Decomposition by Component\nLLaMA-2-7B Token Generation', 
                      fontsize=14, fontweight='bold', pad=20)
         
-        # Add legend with percentages
         legend_labels = [f'{comp.replace(chr(10), " ")}: {pct*100:.0f}%' 
                         for comp, pct in breakdown.items()]
         ax.legend(legend_labels, loc='upper left', bbox_to_anchor=(1, 1), fontsize=10)
@@ -104,19 +89,16 @@ class VisualizationGenerator:
         
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Scatter plot with error bars
         ax.errorbar(seq_lengths, ptl_values, yerr=ptl_std, 
                    fmt='o', markersize=8, capsize=5, capthick=2,
                    color='#FF6B6B', ecolor='#FF6B6B', alpha=0.7,
                    label='Measured per-token latency')
         
-        # Fit exponential curve
         if len(seq_lengths) > 1:
             log_seq = np.log(seq_lengths)
             log_ptl = np.log(ptl_values)
             coeffs = np.polyfit(log_seq, log_ptl, 1)
             
-            # Generate smooth curve
             seq_fit = np.logspace(np.log10(seq_lengths[0]), np.log10(seq_lengths[-1]), 100)
             ptl_fit = np.exp(coeffs[1]) * seq_fit ** coeffs[0]
             
@@ -162,7 +144,6 @@ class VisualizationGenerator:
         
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Bar chart
         categories = ['First-Token\nLatency\n(No Cache)', 'Per-Token\nLatency\n(With Cache)']
         means = [ttft_mean, ptl_mean]
         stds = [ttft_std, ptl_std]
@@ -172,12 +153,10 @@ class VisualizationGenerator:
         bars = ax.bar(x, means, yerr=stds, capsize=10, color=colors_bar, 
                      alpha=0.8, width=0.6, edgecolor='black', linewidth=2)
         
-        # Add value labels
         for i, (mean, std) in enumerate(zip(means, stds)):
             ax.text(i, mean + std + 20, f'{mean:.1f}ms', 
                    ha='center', va='bottom', fontsize=12, fontweight='bold')
         
-        # Add speedup annotation
         speedup = ttft_mean / ptl_mean
         ax.annotate('', xy=(1, ptl_mean), xytext=(0, ttft_mean),
                    arrowprops=dict(arrowstyle='<->', color='green', lw=2))
@@ -192,7 +171,6 @@ class VisualizationGenerator:
         ax.set_xticklabels(categories, fontsize=11)
         ax.set_ylim(0, max(means) * 1.5)
         
-        # Add explanation box
         explanation = (
             f"First token: {ttft_mean:.0f}ms\n"
             f"  • No KV cache (compute everything)\n"
@@ -228,26 +206,20 @@ class VisualizationGenerator:
         seq_lengths = np.array([r['input_seq_len'] for r in scaling_data])
         ptl_values = np.array([r['ptl_ms'] for r in scaling_data])
         
-        # Estimate memory reads for attention
-        # Memory per token ≈ seq_len * hidden_dim * num_heads * (2 if reading + writing)
         hidden_dim = 4096
         num_heads = 32
         num_layers = 32
         
-        # Memory reads per token (in bytes)
         memory_reads = seq_lengths * hidden_dim * num_heads * 4 * 2 * num_layers
         
-        # Memory bandwidth estimates (in GB/s)
-        cpu_bandwidth = 100  # CPU: ~100 GB/s
-        gpu_bandwidth = 900  # GPU: ~900 GB/s
+        cpu_bandwidth = 100
+        gpu_bandwidth = 900
         
-        # Theoretical minimum latency (memory-bound)
-        min_latency_cpu = (memory_reads / cpu_bandwidth) * 1000  # Convert to ms
+        min_latency_cpu = (memory_reads / cpu_bandwidth) * 1000
         min_latency_gpu = (memory_reads / gpu_bandwidth) * 1000
         
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
         
-        # Left plot: Latency vs memory requirement
         ax1.loglog(seq_lengths, ptl_values, 'o-', color='#FF6B6B', 
                   linewidth=2, markersize=8, label='Measured latency')
         ax1.loglog(seq_lengths, min_latency_cpu, '--', color='#4ECDC4', 
@@ -261,7 +233,6 @@ class VisualizationGenerator:
         ax1.legend(fontsize=9)
         ax1.grid(True, alpha=0.3)
         
-        # Right plot: Bandwidth utilization percentage
         bandwidth_util_cpu = (min_latency_cpu / ptl_values) * 100
         
         ax2.plot(seq_lengths, bandwidth_util_cpu, 'o-', color='#4ECDC4',
@@ -312,12 +283,10 @@ class VisualizationGenerator:
         bars = ax.bar(x, times, color=colors_batch, alpha=0.8, 
                      width=0.5, edgecolor='black', linewidth=2)
         
-        # Add value labels
         for i, time in enumerate(times):
             ax.text(i, time + per_prompt_single*0.05, f'{time:.1f}ms',
                    ha='center', va='bottom', fontsize=12, fontweight='bold')
         
-        # Add speedup annotation
         ax.annotate('', xy=(1, per_prompt_batch), xytext=(0, per_prompt_single),
                    arrowprops=dict(arrowstyle='<->', color='green', lw=2))
         ax.text(0.5, (per_prompt_single + per_prompt_batch)/2, 
@@ -332,7 +301,6 @@ class VisualizationGenerator:
         ax.set_xticklabels(categories, fontsize=11)
         ax.set_ylim(0, per_prompt_single * 1.3)
         
-        # Add explanation
         explanation = (
             f"Sequential: 5 × {per_prompt_single:.0f}ms = {per_prompt_single*5:.0f}ms\n"
             f"Batched: {per_prompt_batch*5:.0f}ms for 5 requests\n"
@@ -366,7 +334,6 @@ class VisualizationGenerator:
 def main():
     """Generate visualizations from latest benchmark results."""
     
-    # Find latest results
     results_dir = Path('benchmarks/results')
     result_files = list(results_dir.glob('llama_latency_benchmark_*.json'))
     
